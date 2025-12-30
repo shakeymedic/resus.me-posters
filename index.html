@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Resus.me Poster Generator</title>
+    <title>Resus.me Poster Generator (Ink Friendly)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -11,616 +11,644 @@
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     
-    <!-- Custom Fonts (Inter) -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+    <!-- Custom Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 
     <style>
+        :root {
+            /* ISO 216 Exact Dimensions for A3 */
+            --paper-width: 297mm;
+            --paper-height: 420mm;
+        }
+
         body {
             font-family: 'Inter', sans-serif;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
+            background-color: #52525b; /* Zinc 600 */
+            margin: 0;
+            height: 100vh;
+            overflow: hidden;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
         }
 
-        /* A3 Aspect Ratio for Screen display */
-        .a3-aspect {
-            aspect-ratio: 1 / 1.414;
+        /* === PREVIEW ENGINE === */
+        #app-layout {
+            display: flex;
+            height: 100%;
+            width: 100%;
         }
 
-        /* Print Styles */
-        @media print {
-            @page { 
-                size: A3 portrait; 
-                margin: 0; 
-            }
-            body { 
-                margin: 0; 
-                padding: 0; 
-                background: white; 
-            }
-            .no-print { 
-                display: none !important; 
-            }
-            .print-full { 
-                width: 100% !important; 
-                height: 100vh !important; 
-                max-width: none !important;
-                box-shadow: none !important;
-                aspect-ratio: auto !important;
-                overflow: visible !important;
-            }
-            .print-opacity-100 {
-                opacity: 1 !important;
-            }
+        #viewport {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            background-color: #52525b;
+            position: relative;
         }
-        
-        /* Utility to hide elements */
-        .hidden-poster {
+
+        #paper-stage {
+            /* Force the aspect ratio to exactly 1 : 1.4142 (Square root of 2)
+               This ensures A4 and A3 are mathematically identical in shape.
+            */
+            aspect-ratio: 1 / 1.41421356;
+            width: var(--paper-width);
+            height: var(--paper-height);
+            background: white;
+            position: relative;
+            box-shadow: 0 0 50px rgba(0,0,0,0.5);
+            transform-origin: center center;
+            /* Will be scaled by JS */
+        }
+
+        /* === POSTER CONTENT === */
+        .poster {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
             display: none;
+            flex-direction: column;
+            overflow: hidden; 
+            background: white;
+        }
+
+        .poster.active {
+            display: flex;
+        }
+
+        /* === PRINT DRIVER OVERRIDES === */
+        @media print {
+            @page {
+                size: A3 portrait;
+                margin: 0; 
+            }
+
+            body {
+                background: white;
+                height: auto;
+                width: 100%;
+                overflow: visible;
+            }
+
+            #sidebar, #viewport-controls {
+                display: none !important;
+            }
+
+            #viewport {
+                display: block;
+                height: auto;
+                overflow: visible;
+                background: white;
+            }
+
+            #paper-stage {
+                width: 100% !important;
+                height: 100vh !important;
+                box-shadow: none;
+                transform: none !important;
+                margin: 0;
+                page-break-after: always;
+                /* Ensure borders print */
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .poster.active {
+                display: flex !important;
+            }
         }
     </style>
 </head>
-<body class="bg-gray-100 text-gray-900 flex flex-col md:flex-row min-h-screen">
+<body>
 
-    <!-- Sidebar Navigation -->
-    <div class="no-print w-full md:w-64 bg-slate-900 text-white p-6 flex flex-col gap-4 shrink-0 h-auto md:h-screen sticky top-0 overflow-y-auto z-50">
-        <div class="mb-6">
-            <h1 class="text-2xl font-bold tracking-tight text-red-500">RESUS<span class="text-white">.ME</span></h1>
-            <p class="text-sm text-slate-400 mt-1">Poster Generator</p>
-        </div>
+    <div id="app-layout">
         
-        <nav class="flex flex-col gap-2" id="nav-container">
-            <!-- Nav buttons generated by JS -->
-        </nav>
-
-        <div class="mt-auto pt-6 border-t border-slate-700">
-            <button onclick="window.print()" class="w-full flex items-center justify-center gap-2 bg-white text-slate-900 p-3 rounded-lg font-bold hover:bg-gray-200 transition-colors">
-                <i data-lucide="printer" class="w-5 h-5"></i>
-                Print A3 Poster
-            </button>
-            <p class="text-xs text-center text-slate-500 mt-4">
-                Optimised for A3 Portrait<br/>
-                Select 'Background Graphics' in print settings.
-            </p>
-        </div>
-    </div>
-
-    <!-- Main Content Area -->
-    <div class="flex-1 p-4 md:p-8 overflow-auto bg-gray-100 flex justify-center items-start print:p-0 print:bg-white print:block">
-        
-        <!-- Poster Container -->
-        <div id="poster-container" class="print-full bg-white shadow-2xl w-full max-w-[800px] a3-aspect relative overflow-hidden flex flex-col">
-            
-            <!-- Header Watermark -->
-            <div class="absolute top-0 right-0 p-6 opacity-20 print-opacity-100 pointer-events-none z-50">
-                <div class="text-right">
-                    <h3 class="text-2xl font-black text-slate-900 tracking-tighter">RESUS.ME</h3>
-                    <p class="text-sm uppercase tracking-widest font-bold text-slate-500">Critical Care Education</p>
+        <!-- Sidebar -->
+        <div id="sidebar" class="w-80 bg-slate-900 text-white flex flex-col shrink-0 z-50 shadow-2xl h-full border-r border-slate-700">
+            <div class="p-8 border-b border-slate-800">
+                <h1 class="text-4xl font-black tracking-tighter text-white">RESUS<span class="text-red-500">.ME</span></h1>
+                <p class="text-xs font-bold text-slate-500 uppercase tracking-[0.2em] mt-2">Print Master v5</p>
+                <div class="mt-2 inline-flex items-center gap-2 bg-green-900/30 text-green-400 px-2 py-1 rounded text-[10px] font-bold border border-green-800">
+                    <i data-lucide="droplet" class="w-3 h-3"></i> INK SAVER MODE
                 </div>
             </div>
 
-            <!-- POSTER 1: 3 + 3 -->
-            <div id="poster-3plus3" class="poster-content h-full flex flex-col p-6 bg-white text-slate-900">
-                <div class="mb-4 border-b-4 border-slate-900 pb-2 shrink-0">
-                    <h1 class="text-7xl font-black tracking-tighter leading-none text-slate-900">3 + 3</h1>
-                    <div class="flex justify-between items-end">
-                        <h2 class="text-2xl font-bold text-red-600 mt-1">THE RULE OF SHOCK</h2>
-                        <p class="text-sm text-slate-500 font-medium max-w-md text-right">
-                        Cognitive aid for the undifferentiated shocked patient. Oxygen delivery depends on more than just oxygen.
+            <nav class="flex-1 overflow-y-auto p-4 space-y-2" id="nav-container">
+                <!-- Buttons injected by JS -->
+            </nav>
+
+            <div class="p-6 bg-slate-800 border-t border-slate-700">
+                <div class="flex items-center justify-between text-[10px] text-slate-400 font-mono mb-4 uppercase tracking-wider">
+                    <span>Format: ISO A-Series</span>
+                    <span id="scale-readout">---</span>
+                </div>
+                <button onclick="window.print()" class="w-full flex items-center justify-center gap-3 bg-red-600 hover:bg-red-500 text-white p-4 rounded-xl font-bold transition-all shadow-lg hover:shadow-red-500/20 group">
+                    <i data-lucide="printer" class="w-5 h-5 group-hover:scale-110 transition-transform"></i>
+                    PRINT POSTER
+                </button>
+                <p class="text-[10px] text-slate-500 text-center mt-3 leading-tight">
+                    For A4: Select "Fit to Printable Area"
+                </p>
+            </div>
+        </div>
+
+        <!-- Main Viewport -->
+        <div id="viewport">
+            <div id="paper-stage">
+                
+                <!-- Watermark Footer -->
+                <div class="absolute bottom-0 left-0 right-0 h-16 px-10 flex justify-between items-center border-t-2 border-slate-100 bg-white z-50">
+                    <div class="text-slate-400 text-sm font-medium">
+                        <span class="text-slate-900 font-bold tracking-tight">RESUS.ME</span> <span class="mx-2 text-slate-300">|</span> Critical Care Education
+                    </div>
+                    <div class="text-slate-300 text-xs font-mono uppercase tracking-widest" id="poster-ref">
+                        REF: 001
+                    </div>
+                </div>
+
+                <!-- =========================================================================
+                     POSTER 1: 3 + 3 (The Rule of Shock)
+                     Ink Status: LOW (White backgrounds, outline borders)
+                     ========================================================================= -->
+                <div id="poster-3plus3" class="poster active p-10 pb-20">
+                    <div class="flex justify-between items-start border-b-8 border-slate-900 pb-6 mb-6 shrink-0">
+                        <div>
+                            <h1 class="text-[10rem] leading-[0.8] font-black tracking-tighter text-slate-900">3<span class="text-red-600">+</span>3</h1>
+                        </div>
+                        <div class="text-right pt-4">
+                            <h2 class="text-6xl font-black text-red-600 tracking-tight">SHOCK</h2>
+                            <p class="text-2xl font-bold text-slate-500 mt-2 uppercase tracking-wide">The Rule of Six</p>
+                        </div>
+                    </div>
+
+                    <div class="flex-1 grid grid-cols-2 gap-6 min-h-0">
+                        <!-- Left Column -->
+                        <div class="flex flex-col gap-6">
+                            <!-- Volume (White bg, Blue Border) -->
+                            <div class="flex-1 bg-white rounded-3xl p-8 border-4 border-blue-100 relative overflow-hidden flex flex-col shadow-sm">
+                                <div class="absolute top-0 left-0 right-0 h-2 bg-blue-600"></div>
+                                <i data-lucide="droplet" class="absolute -right-4 -bottom-4 w-48 h-48 text-blue-50 pointer-events-none"></i>
+                                <div class="relative z-10 flex-1">
+                                    <div class="flex items-center gap-4 mb-4">
+                                        <span class="bg-blue-600 text-white text-2xl font-black w-12 h-12 flex items-center justify-center rounded-lg">1</span>
+                                        <h3 class="text-4xl font-black text-blue-900">VOLUME</h3>
+                                    </div>
+                                    <p class="text-blue-700 font-bold text-sm uppercase tracking-widest mb-6 border-b border-blue-100 pb-2">Is the tank empty?</p>
+                                    <ul class="space-y-4">
+                                        <li><span class="font-black text-slate-900 text-xl block">Bleeding</span> <span class="text-slate-600">Chest, Abdo, Pelvis, Long Bones, Floor.</span></li>
+                                        <li><span class="font-black text-slate-900 text-xl block">Fluid Loss</span> <span class="text-slate-600">GI (V/D), Renal (DKA), Skin (Burns).</span></li>
+                                        <li><span class="font-black text-slate-900 text-xl block">Capillary Leak</span> <span class="text-slate-600">Sepsis, Anaphylaxis, Pancreatitis.</span></li>
+                                    </ul>
+                                </div>
+                                <div class="relative z-10 mt-auto pt-4">
+                                    <div class="bg-blue-50 rounded-lg p-3 text-sm font-bold text-blue-900 flex items-center gap-2 border border-blue-100">
+                                        <i data-lucide="scan-line" class="w-5 h-5"></i> POCUS: Hyperdynamic LV, Flat IVC
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Pump (White bg, Red Border) -->
+                            <div class="flex-1 bg-white rounded-3xl p-8 border-4 border-red-100 relative overflow-hidden flex flex-col shadow-sm">
+                                <div class="absolute top-0 left-0 right-0 h-2 bg-red-600"></div>
+                                <i data-lucide="heart-pulse" class="absolute -right-4 -bottom-4 w-48 h-48 text-red-50 pointer-events-none"></i>
+                                <div class="relative z-10 flex-1">
+                                    <div class="flex items-center gap-4 mb-4">
+                                        <span class="bg-red-600 text-white text-2xl font-black w-12 h-12 flex items-center justify-center rounded-lg">2</span>
+                                        <h3 class="text-4xl font-black text-red-900">PUMP</h3>
+                                    </div>
+                                    <p class="text-red-700 font-bold text-sm uppercase tracking-widest mb-6 border-b border-red-100 pb-2">Is the engine broken?</p>
+                                    <ul class="space-y-4">
+                                        <li><span class="font-black text-slate-900 text-xl block">Myocardial</span> <span class="text-slate-600">Ischaemia, Infarction, Contusion.</span></li>
+                                        <li><span class="font-black text-slate-900 text-xl block">Rhythm</span> <span class="text-slate-600">Tachy (low filling), Brady (low output).</span></li>
+                                        <li><span class="font-black text-slate-900 text-xl block">Valvular</span> <span class="text-slate-600">Acute regurgitation, Stenosis.</span></li>
+                                    </ul>
+                                </div>
+                                <div class="relative z-10 mt-auto pt-4">
+                                    <div class="bg-red-50 rounded-lg p-3 text-sm font-bold text-red-900 flex items-center gap-2 border border-red-100">
+                                        <i data-lucide="scan-line" class="w-5 h-5"></i> POCUS: Poor contractility
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right Column -->
+                        <div class="bg-white rounded-3xl p-8 border-4 border-yellow-100 relative overflow-hidden flex flex-col shadow-sm">
+                            <div class="absolute top-0 left-0 right-0 h-2 bg-yellow-500"></div>
+                            <i data-lucide="alert-triangle" class="absolute -right-12 -top-12 w-80 h-80 text-yellow-50/50 pointer-events-none"></i>
+                            <div class="relative z-10 mb-8">
+                                <div class="flex items-center gap-4 mb-4">
+                                    <span class="bg-yellow-500 text-white text-2xl font-black w-12 h-12 flex items-center justify-center rounded-lg">3</span>
+                                    <h3 class="text-4xl font-black text-yellow-900">BLOCK</h3>
+                                </div>
+                                <p class="text-yellow-700 font-bold text-sm uppercase tracking-widest border-b border-yellow-200 pb-2">Is the pipe obstructed?</p>
+                            </div>
+                            <div class="relative z-10 flex-1 flex flex-col justify-between gap-4">
+                                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex-1 flex flex-col justify-center">
+                                    <h4 class="text-3xl font-black text-slate-900 mb-1">TENSION</h4>
+                                    <div class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">Pneumothorax</div>
+                                    <p class="text-slate-700 font-medium leading-tight">PPV converts simple PTX to tension rapidly.</p>
+                                    <div class="mt-3 inline-flex items-center gap-2 bg-slate-100 px-3 py-1 rounded text-xs font-mono font-bold text-slate-600 self-start">
+                                        <i data-lucide="search" class="w-3 h-3"></i> NO LUNG SLIDING
+                                    </div>
+                                </div>
+                                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex-1 flex flex-col justify-center">
+                                    <h4 class="text-3xl font-black text-slate-900 mb-1">TAMPONADE</h4>
+                                    <div class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">Cardiac</div>
+                                    <p class="text-slate-700 font-medium leading-tight">Look for pulsus paradoxus on arterial line trace.</p>
+                                    <div class="mt-3 inline-flex items-center gap-2 bg-slate-100 px-3 py-1 rounded text-xs font-mono font-bold text-slate-600 self-start">
+                                        <i data-lucide="search" class="w-3 h-3"></i> RV DIASTOLIC COLLAPSE
+                                    </div>
+                                </div>
+                                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex-1 flex flex-col justify-center">
+                                    <h4 class="text-3xl font-black text-slate-900 mb-1">THROMBUS</h4>
+                                    <div class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">Pulmonary Embolism</div>
+                                    <p class="text-slate-700 font-medium leading-tight">Sudden arrest with PEA. Hypoxia with clear chest.</p>
+                                    <div class="mt-3 inline-flex items-center gap-2 bg-slate-100 px-3 py-1 rounded text-xs font-mono font-bold text-slate-600 self-start">
+                                        <i data-lucide="search" class="w-3 h-3"></i> DILATED RV / D-SIGN
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- =========================================================================
+                     POSTER 2: WOBBLER
+                     Ink Status: LOW (White backgrounds)
+                     ========================================================================= -->
+                <div id="poster-wobbler" class="poster p-10 pb-20 bg-white">
+                    <div class="text-center mb-8 shrink-0">
+                        <h1 class="text-8xl font-black text-slate-900 tracking-tighter mb-2">SYNCOPE?</h1>
+                        <div class="inline-block border-2 border-red-600 text-red-600 px-8 py-3 rounded-full transform -rotate-1 shadow-sm">
+                            <h2 class="text-3xl font-bold tracking-widest">THE W.O.B.B.L.E.R.</h2>
+                        </div>
+                        <p class="text-xl text-slate-500 mt-6 max-w-3xl mx-auto font-medium">
+                            If the patient looks well but the ECG wobbles, admit for telemetry.
                         </p>
                     </div>
+                    <div class="flex-1 flex flex-col justify-between gap-3 min-h-0">
+                        <!-- Items -->
+                        <div class="flex items-stretch bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-200 flex-1">
+                            <div class="w-24 bg-white border-r border-slate-200 flex items-center justify-center text-5xl font-black text-slate-900 shrink-0">W</div>
+                            <div class="flex-1 px-6 flex items-center">
+                                <div class="w-1/3 shrink-0 border-r border-slate-100 mr-6">
+                                    <h3 class="text-2xl font-black text-slate-900 leading-none">WPW</h3>
+                                    <span class="text-xs font-bold text-red-600 uppercase tracking-wide">Pre-excitation</span>
+                                </div>
+                                <p class="text-lg text-slate-700 font-medium leading-tight">Delta wave. Short PR (&lt;120ms). Risk of SVT &rarr; VF.</p>
+                            </div>
+                        </div>
+                        <div class="flex items-stretch bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-200 flex-1">
+                            <div class="w-24 bg-white border-r border-slate-200 flex items-center justify-center text-5xl font-black text-slate-900 shrink-0">O</div>
+                            <div class="flex-1 px-6 flex items-center">
+                                <div class="w-1/3 shrink-0 border-r border-slate-100 mr-6">
+                                    <h3 class="text-2xl font-black text-slate-900 leading-none">OBSTRUCTION</h3>
+                                    <span class="text-xs font-bold text-red-600 uppercase tracking-wide">AV Block</span>
+                                </div>
+                                <p class="text-lg text-slate-700 font-medium leading-tight">PR &gt;200ms? Mobitz? Axis deviation suggests conduction disease.</p>
+                            </div>
+                        </div>
+                        <div class="flex items-stretch bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-200 flex-1">
+                            <div class="w-24 bg-white border-r border-slate-200 flex items-center justify-center text-5xl font-black text-slate-900 shrink-0">B</div>
+                            <div class="flex-1 px-6 flex items-center">
+                                <div class="w-1/3 shrink-0 border-r border-slate-100 mr-6">
+                                    <h3 class="text-2xl font-black text-slate-900 leading-none">BIFASCICULAR</h3>
+                                    <span class="text-xs font-bold text-red-600 uppercase tracking-wide">Major Block</span>
+                                </div>
+                                <p class="text-lg text-slate-700 font-medium leading-tight">RBBB + Left Axis (LAFB) or Right Axis (LPFB). High risk of CHB.</p>
+                            </div>
+                        </div>
+                        <div class="flex items-stretch bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-200 flex-1">
+                            <div class="w-24 bg-white border-r border-slate-200 flex items-center justify-center text-5xl font-black text-slate-900 shrink-0">B</div>
+                            <div class="flex-1 px-6 flex items-center">
+                                <div class="w-1/3 shrink-0 border-r border-slate-100 mr-6">
+                                    <h3 class="text-2xl font-black text-slate-900 leading-none">BRUGADA</h3>
+                                    <span class="text-xs font-bold text-red-600 uppercase tracking-wide">Channelopathy</span>
+                                </div>
+                                <p class="text-lg text-slate-700 font-medium leading-tight">V1-V2: Coved ST elevation &gt;2mm (Type 1). Saddleback (Type 2).</p>
+                            </div>
+                        </div>
+                        <div class="flex items-stretch bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-200 flex-1">
+                            <div class="w-24 bg-white border-r border-slate-200 flex items-center justify-center text-5xl font-black text-slate-900 shrink-0">L</div>
+                            <div class="flex-1 px-6 flex items-center">
+                                <div class="w-1/3 shrink-0 border-r border-slate-100 mr-6">
+                                    <h3 class="text-2xl font-black text-slate-900 leading-none">LVH</h3>
+                                    <span class="text-xs font-bold text-red-600 uppercase tracking-wide">Hypertrophy</span>
+                                </div>
+                                <p class="text-lg text-slate-700 font-medium leading-tight">Deep Q waves (HOCM). Severe Aortic Stenosis strain pattern.</p>
+                            </div>
+                        </div>
+                        <div class="flex items-stretch bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-200 flex-1">
+                            <div class="w-24 bg-white border-r border-slate-200 flex items-center justify-center text-5xl font-black text-slate-900 shrink-0">E</div>
+                            <div class="flex-1 px-6 flex items-center">
+                                <div class="w-1/3 shrink-0 border-r border-slate-100 mr-6">
+                                    <h3 class="text-2xl font-black text-slate-900 leading-none">EPSILON</h3>
+                                    <span class="text-xs font-bold text-red-600 uppercase tracking-wide">ARVC</span>
+                                </div>
+                                <p class="text-lg text-slate-700 font-medium leading-tight">Notch at end of QRS in V1-V3. T-wave inversion V1-V3.</p>
+                            </div>
+                        </div>
+                        <div class="flex items-stretch bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-200 flex-1">
+                            <div class="w-24 bg-white border-r border-slate-200 flex items-center justify-center text-5xl font-black text-slate-900 shrink-0">R</div>
+                            <div class="flex-1 px-6 flex items-center">
+                                <div class="w-1/3 shrink-0 border-r border-slate-100 mr-6">
+                                    <h3 class="text-2xl font-black text-slate-900 leading-none">REPOLARISATION</h3>
+                                    <span class="text-xs font-bold text-red-600 uppercase tracking-wide">QT Interval</span>
+                                </div>
+                                <p class="text-lg text-slate-700 font-medium leading-tight">Long QT (QTc &gt;450ms). Short QT (&lt;330ms). R-on-T phenomenon.</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="flex-1 grid grid-cols-2 gap-4 items-stretch min-h-0">
-                    <!-- Left Column -->
-                    <div class="flex flex-col gap-4">
-                        <!-- Volume -->
-                        <div class="bg-blue-50 p-4 rounded-2xl border-l-8 border-blue-500 flex-1 flex flex-col justify-between">
-                            <div class="flex items-center gap-2 mb-2">
-                                <div class="bg-blue-500 text-white p-2 rounded-lg"><i data-lucide="target" class="w-5 h-5"></i></div>
-                                <h3 class="text-2xl font-bold text-blue-900">1. VOLUME</h3>
-                            </div>
-                            <div class="ml-1 flex-1 flex flex-col justify-center">
-                                <h4 class="font-bold text-blue-700 text-xs uppercase tracking-wider mb-2">Is the tank empty?</h4>
-                                <ul class="space-y-2 text-sm font-medium text-slate-700 list-disc list-inside mb-2">
-                                    <li><span class="text-blue-900 font-bold">Bleeding</span> <span class="text-xs text-slate-500 block pl-4">Chest, Abdo, Pelvis, Retroperitoneum, Long Bones, Floor.</span></li>
-                                    <li><span class="text-blue-900 font-bold">Fluid Loss</span> <span class="text-xs text-slate-500 block pl-4">GI (V/D), Renal (DKA/DI), Skin (Burns).</span></li>
-                                    <li><span class="text-blue-900 font-bold">Capillary Leak</span> <span class="text-xs text-slate-500 block pl-4">Sepsis, Anaphylaxis, Pancreatitis.</span></li>
-                                </ul>
-                                <div class="p-2 bg-blue-100 rounded-lg text-blue-900 text-xs font-bold flex gap-2 items-center mt-auto">
-                                    <i data-lucide="search" class="w-3 h-3"></i> POCUS: Hyperdynamic LV, Flat IVC.
+                <!-- =========================================================================
+                     POSTER 3: STEPS
+                     Ink Status: LOW
+                     ========================================================================= -->
+                <div id="poster-steps" class="poster p-10 pb-20 bg-white">
+                    <div class="flex justify-between items-end border-b-8 border-slate-900 pb-6 mb-8 shrink-0">
+                        <div>
+                            <h1 class="text-[9rem] leading-[0.8] font-black text-slate-900 tracking-tighter">S.T.E.P.S.</h1>
+                            <h2 class="text-3xl font-light text-slate-500 mt-2 tracking-wide uppercase">The Hot Debrief Framework</h2>
+                        </div>
+                        <div class="bg-white border-2 border-slate-200 px-6 py-4 rounded-2xl text-right">
+                            <div class="font-bold text-slate-900 text-xl">TIMING</div>
+                            <div class="text-slate-500 font-mono text-sm">Target: &lt;10 mins post-event</div>
+                        </div>
+                    </div>
+                    <div class="flex-1 flex flex-col gap-5 min-h-0">
+                        <div class="flex-1 flex gap-8 items-center bg-white pr-8 rounded-3xl overflow-hidden border-2 border-slate-200 shadow-sm">
+                            <div class="h-full w-40 bg-white border-r-2 border-slate-100 flex items-center justify-center text-8xl font-black text-blue-600 shrink-0">S</div>
+                            <div class="flex-1 py-2">
+                                <h3 class="text-4xl font-black text-blue-900 mb-1">SELF</h3>
+                                <div class="flex items-baseline gap-4">
+                                    <span class="font-serif italic text-slate-400 text-xl">"I felt..."</span>
+                                    <span class="text-xl text-slate-700 font-medium">How was my cognitive bandwidth? Did I feel overwhelmed?</span>
                                 </div>
                             </div>
                         </div>
-                        <!-- Pump -->
-                        <div class="bg-red-50 p-4 rounded-2xl border-l-8 border-red-500 flex-1 flex flex-col justify-between">
-                            <div class="flex items-center gap-2 mb-2">
-                                <div class="bg-red-500 text-white p-2 rounded-lg"><i data-lucide="heart" class="w-5 h-5"></i></div>
-                                <h3 class="text-2xl font-bold text-red-900">2. PUMP</h3>
+                        <div class="flex-1 flex gap-8 items-center bg-white pr-8 rounded-3xl overflow-hidden border-2 border-slate-200 shadow-sm">
+                            <div class="h-full w-40 bg-white border-r-2 border-slate-100 flex items-center justify-center text-8xl font-black text-indigo-600 shrink-0">T</div>
+                            <div class="flex-1 py-2">
+                                <h3 class="text-4xl font-black text-indigo-900 mb-1">TEAM</h3>
+                                <div class="flex items-baseline gap-4">
+                                    <span class="font-serif italic text-slate-400 text-xl">"We worked..."</span>
+                                    <span class="text-xl text-slate-700 font-medium">Was the Team Leader hands-off? Was communication closed-loop?</span>
+                                </div>
                             </div>
-                            <div class="ml-1 flex-1 flex flex-col justify-center">
-                                <h4 class="font-bold text-red-700 text-xs uppercase tracking-wider mb-2">Is the engine broken?</h4>
-                                <ul class="space-y-2 text-sm font-medium text-slate-700 list-disc list-inside mb-2">
-                                    <li><span class="text-red-900 font-bold">Myocardial</span> <span class="text-xs text-slate-500 block pl-4">Ischaemia, Infarction, Myocarditis, Contusion.</span></li>
-                                    <li><span class="text-red-900 font-bold">Rhythm</span> <span class="text-xs text-slate-500 block pl-4">Tachy (low filling), Brady (low output).</span></li>
-                                    <li><span class="text-red-900 font-bold">Valvular</span> <span class="text-xs text-slate-500 block pl-4">Acute regurgitation, Stenosis.</span></li>
-                                </ul>
-                                <div class="p-2 bg-red-100 rounded-lg text-red-900 text-xs font-bold flex gap-2 items-center mt-auto">
-                                    <i data-lucide="search" class="w-3 h-3"></i> POCUS: Poor contractility, dilated LV/RV.
+                        </div>
+                        <div class="flex-1 flex gap-8 items-center bg-white pr-8 rounded-3xl overflow-hidden border-2 border-slate-200 shadow-sm">
+                            <div class="h-full w-40 bg-white border-r-2 border-slate-100 flex items-center justify-center text-8xl font-black text-purple-600 shrink-0">E</div>
+                            <div class="flex-1 py-2">
+                                <h3 class="text-4xl font-black text-purple-900 mb-1">ENVIRONMENT</h3>
+                                <div class="flex items-baseline gap-4">
+                                    <span class="font-serif italic text-slate-400 text-xl">"The room..."</span>
+                                    <span class="text-xl text-slate-700 font-medium">Was equipment ready? Did technology fail? Noise control?</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex-1 flex gap-8 items-center bg-white pr-8 rounded-3xl overflow-hidden border-2 border-slate-200 shadow-sm">
+                            <div class="h-full w-40 bg-white border-r-2 border-slate-100 flex items-center justify-center text-8xl font-black text-pink-600 shrink-0">P</div>
+                            <div class="flex-1 py-2">
+                                <h3 class="text-4xl font-black text-pink-900 mb-1">PATIENT</h3>
+                                <div class="flex items-baseline gap-4">
+                                    <span class="font-serif italic text-slate-400 text-xl">"The case..."</span>
+                                    <span class="text-xl text-slate-700 font-medium">Specific clinical difficulties? Unpredicted physiology? Missed cues?</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex-1 flex gap-8 items-center bg-white pr-8 rounded-3xl overflow-hidden border-2 border-slate-200 shadow-sm">
+                            <div class="h-full w-40 bg-white border-r-2 border-slate-100 flex items-center justify-center text-8xl font-black text-red-600 shrink-0">S</div>
+                            <div class="flex-1 py-2">
+                                <h3 class="text-4xl font-black text-red-900 mb-1">SYSTEM</h3>
+                                <div class="flex items-baseline gap-4">
+                                    <span class="font-serif italic text-slate-400 text-xl">"The org..."</span>
+                                    <span class="text-xl text-slate-700 font-medium">Latent errors? Protocols need updating? Training gaps identified?</span>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <!-- Right Column: Obstruction -->
-                    <div class="bg-yellow-50 p-5 rounded-2xl border-l-8 border-yellow-500 h-full flex flex-col">
-                        <div class="flex items-center gap-2 mb-3">
-                            <div class="bg-yellow-500 text-white p-2 rounded-lg"><i data-lucide="alert-triangle" class="w-5 h-5"></i></div>
-                            <h3 class="text-2xl font-bold text-yellow-900">3. OBSTRUCTION</h3>
-                        </div>
-                        <h4 class="font-bold text-yellow-700 text-xs uppercase tracking-wider mb-3 ml-1">Is the pipe blocked?</h4>
-                        <div class="flex-1 flex flex-col gap-3">
-                            <div class="bg-white p-3 rounded-xl border-l-4 border-yellow-400 shadow-sm flex-1 flex flex-col justify-center">
-                                <h4 class="text-lg font-black text-slate-800">1. TENSION</h4>
-                                <p class="text-xs font-bold text-slate-500 uppercase tracking-wide">Pneumothorax</p>
-                                <p class="text-xs text-slate-600 mt-1 leading-snug">PPV converts simple PTX to tension.</p>
-                                <div class="mt-2 text-[10px] font-mono bg-slate-100 p-1 px-2 inline-block rounded text-slate-600">Sign: Absent lung sliding (POCUS)</div>
-                            </div>
-                            <div class="bg-white p-3 rounded-xl border-l-4 border-yellow-400 shadow-sm flex-1 flex flex-col justify-center">
-                                <h4 class="text-lg font-black text-slate-800">2. TAMPONADE</h4>
-                                <p class="text-xs font-bold text-slate-500 uppercase tracking-wide">Cardiac</p>
-                                <p class="text-xs text-slate-600 mt-1 leading-snug">Beck's Triad is rare. Look for pulsus paradoxus.</p>
-                                <div class="mt-2 text-[10px] font-mono bg-slate-100 p-1 px-2 inline-block rounded text-slate-600">Sign: RV diastolic collapse (POCUS)</div>
-                            </div>
-                            <div class="bg-white p-3 rounded-xl border-l-4 border-yellow-400 shadow-sm flex-1 flex flex-col justify-center">
-                                <h4 class="text-lg font-black text-slate-800">3. THROMBUS</h4>
-                                <p class="text-xs font-bold text-slate-500 uppercase tracking-wide">Pulmonary Embolism</p>
-                                <p class="text-xs text-slate-600 mt-1 leading-snug">Consider in sudden arrest with PEA. Hypoxia + Clear Chest.</p>
-                                <div class="mt-2 text-[10px] font-mono bg-slate-100 p-1 px-2 inline-block rounded text-slate-600">Sign: Dilated RV, D-sign (POCUS)</div>
-                            </div>
-                        </div>
-                    </div>
                 </div>
-                <div class="mt-4 pt-2 border-t border-slate-200 flex justify-between text-[10px] font-mono uppercase text-slate-400 shrink-0">
-                    <span>Resus.me • Cliff Reid</span>
-                    <span>Context: Undifferentiated Shock</span>
-                </div>
-            </div>
 
-            <!-- POSTER 2: WOBBLER -->
-            <div id="poster-wobbler" class="poster-content h-full flex flex-col p-6 bg-slate-50 text-slate-900 hidden-poster">
-                <div class="mb-4 text-center shrink-0">
-                    <h1 class="text-5xl font-black tracking-tight text-slate-900 mb-1">SYNCOPE?</h1>
-                    <h2 class="text-xl font-bold text-red-600 bg-red-50 inline-block px-4 py-1 rounded-full border border-red-100">CHECK THE ECG FOR THE W.O.B.B.L.E.R.</h2>
-                    <p class="text-slate-500 mt-1 max-w-xl mx-auto text-xs">In the well patient with syncope, a normal 12-lead ECG is reassuring. But subtle signs can predict sudden cardiac death.</p>
-                </div>
-                <div class="flex-1 flex flex-col justify-between gap-2 min-h-0" id="wobbler-list">
-                    <!-- JS will populate, or better yet, static HTML for stability -->
-                    <div class="flex items-center gap-3 bg-white p-2 rounded-lg shadow-sm border-l-4 border-slate-800 flex-1">
-                        <div class="w-8 h-8 bg-slate-900 text-white rounded flex items-center justify-center text-lg font-black shrink-0">W</div>
-                        <div class="flex-1 min-w-0">
-                            <div class="flex items-center gap-2 flex-wrap">
-                                <h3 class="text-sm font-black text-slate-800">WPW</h3>
-                                <span class="text-[10px] font-bold text-red-600 uppercase tracking-wide bg-red-50 px-2 py-0.5 rounded">Wolff-Parkinson-White</span>
+                <!-- =========================================================================
+                     POSTER 4: WHIMPERATIVE
+                     Ink Status: LOW (Reversed from dark)
+                     ========================================================================= -->
+                <div id="poster-whimperative" class="poster flex-row bg-white text-slate-900">
+                    <!-- Passive Side -->
+                    <div class="w-1/2 h-full bg-white p-12 pb-20 flex flex-col border-r-2 border-red-100">
+                        <div class="mb-12 border-b-4 border-red-100 pb-6">
+                            <div class="flex items-center gap-4 text-red-600 mb-2">
+                                <i data-lucide="x-circle" class="w-12 h-12"></i>
+                                <h2 class="text-4xl font-black tracking-widest uppercase">The Whimperative</h2>
                             </div>
-                            <p class="text-xs text-slate-600 font-medium leading-tight mt-0.5">Short PR (&lt;120ms) + Delta wave. Risk of SVT degenerating to VF.</p>
+                            <p class="text-slate-500 text-xl font-medium leading-tight">
+                                "Mitigated speech" creates ambiguity when clarity is vital. It is a disaster in resuscitation.
+                            </p>
+                        </div>
+                        <div class="flex-1 flex flex-col justify-center gap-12">
+                            <div class="pl-8 border-l-4 border-red-200">
+                                <p class="text-3xl font-serif italic text-slate-400 mb-3">"Would someone mind maybe grabbing the airway trolley?"</p>
+                                <div class="inline-block border border-red-200 text-red-600 text-sm font-bold px-4 py-1 rounded uppercase tracking-wide">
+                                    Fail: Ambiguous Target
+                                </div>
+                            </div>
+                            <div class="pl-8 border-l-4 border-red-200">
+                                <p class="text-3xl font-serif italic text-slate-400 mb-3">"Any chance we could get a line in?"</p>
+                                <div class="inline-block border border-red-200 text-red-600 text-sm font-bold px-4 py-1 rounded uppercase tracking-wide">
+                                    Fail: Question vs Order
+                                </div>
+                            </div>
+                            <div class="pl-8 border-l-4 border-red-200">
+                                <p class="text-3xl font-serif italic text-slate-400 mb-3">"I think we should probably shock him soon."</p>
+                                <div class="inline-block border border-red-200 text-red-600 text-sm font-bold px-4 py-1 rounded uppercase tracking-wide">
+                                    Fail: Hinting vs Action
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    <div class="flex items-center gap-3 bg-white p-2 rounded-lg shadow-sm border-l-4 border-slate-800 flex-1">
-                        <div class="w-8 h-8 bg-slate-900 text-white rounded flex items-center justify-center text-lg font-black shrink-0">O</div>
-                        <div class="flex-1 min-w-0">
-                            <div class="flex items-center gap-2 flex-wrap">
-                                <h3 class="text-sm font-black text-slate-800">OBSTRUCTED</h3>
-                                <span class="text-[10px] font-bold text-red-600 uppercase tracking-wide bg-red-50 px-2 py-0.5 rounded">AV Pathway Obstruction</span>
+                    <!-- Direct Side -->
+                    <div class="w-1/2 h-full bg-white p-12 pb-20 flex flex-col">
+                        <div class="mb-12 border-b-4 border-green-100 pb-6">
+                            <div class="flex items-center gap-4 text-green-600 mb-2">
+                                <i data-lucide="check-circle-2" class="w-12 h-12"></i>
+                                <h2 class="text-4xl font-black tracking-widest uppercase">The Directive</h2>
                             </div>
-                            <p class="text-xs text-slate-600 font-medium leading-tight mt-0.5">1st degree block (PR &gt;200ms)? Mobitz? Axis deviation suggests conduction disease.</p>
+                            <p class="text-slate-500 text-xl font-medium leading-tight">
+                                Be polite, but be direct. Use names. Use close-looped communication.
+                            </p>
                         </div>
-                    </div>
-                    <div class="flex items-center gap-3 bg-white p-2 rounded-lg shadow-sm border-l-4 border-slate-800 flex-1">
-                        <div class="w-8 h-8 bg-slate-900 text-white rounded flex items-center justify-center text-lg font-black shrink-0">B</div>
-                        <div class="flex-1 min-w-0">
-                            <div class="flex items-center gap-2 flex-wrap">
-                                <h3 class="text-sm font-black text-slate-800">BIFASCICULAR</h3>
-                                <span class="text-[10px] font-bold text-red-600 uppercase tracking-wide bg-red-50 px-2 py-0.5 rounded">Bifascicular Block</span>
+                        <div class="flex-1 flex flex-col justify-center gap-12">
+                            <div class="pl-8 border-l-8 border-green-500">
+                                <p class="text-3xl font-black text-slate-900 mb-3">"Steve, bring the airway trolley to the bedside."</p>
+                                <div class="inline-block bg-green-50 border border-green-200 text-green-700 text-sm font-bold px-4 py-1 rounded uppercase tracking-wide">
+                                    Name + Action + Location
+                                </div>
                             </div>
-                            <p class="text-xs text-slate-600 font-medium leading-tight mt-0.5">RBBB + LAFB (Left Axis) OR RBBB + LPFB (Right Axis). High risk for CHB.</p>
-                        </div>
-                    </div>
-                    <div class="flex items-center gap-3 bg-white p-2 rounded-lg shadow-sm border-l-4 border-slate-800 flex-1">
-                        <div class="w-8 h-8 bg-slate-900 text-white rounded flex items-center justify-center text-lg font-black shrink-0">B</div>
-                        <div class="flex-1 min-w-0">
-                            <div class="flex items-center gap-2 flex-wrap">
-                                <h3 class="text-sm font-black text-slate-800">BRUGADA</h3>
-                                <span class="text-[10px] font-bold text-red-600 uppercase tracking-wide bg-red-50 px-2 py-0.5 rounded">Sodium Channelopathy</span>
+                            <div class="pl-8 border-l-8 border-green-500">
+                                <p class="text-3xl font-black text-slate-900 mb-3">"Sarah, insert a large-bore IV in the left ACF."</p>
+                                <div class="inline-block bg-green-50 border border-green-200 text-green-700 text-sm font-bold px-4 py-1 rounded uppercase tracking-wide">
+                                    Name + Specific Task
+                                </div>
                             </div>
-                            <p class="text-xs text-slate-600 font-medium leading-tight mt-0.5">V1-V2: Coved ST elevation &gt;2mm (Type 1). Saddleback (Type 2).</p>
-                        </div>
-                    </div>
-                    <div class="flex items-center gap-3 bg-white p-2 rounded-lg shadow-sm border-l-4 border-slate-800 flex-1">
-                        <div class="w-8 h-8 bg-slate-900 text-white rounded flex items-center justify-center text-lg font-black shrink-0">L</div>
-                        <div class="flex-1 min-w-0">
-                            <div class="flex items-center gap-2 flex-wrap">
-                                <h3 class="text-sm font-black text-slate-800">LVH</h3>
-                                <span class="text-[10px] font-bold text-red-600 uppercase tracking-wide bg-red-50 px-2 py-0.5 rounded">Left Ventricular Hypertrophy</span>
+                            <div class="pl-8 border-l-8 border-green-500">
+                                <p class="text-3xl font-black text-slate-900 mb-3">"Charge the defibrillator. Everyone stand clear."</p>
+                                <div class="inline-block bg-green-50 border border-green-200 text-green-700 text-sm font-bold px-4 py-1 rounded uppercase tracking-wide">
+                                    Clear Command
+                                </div>
                             </div>
-                            <p class="text-xs text-slate-600 font-medium leading-tight mt-0.5">S in V1 + R in V5/6 &gt; 35mm. Suggests HOCM (deep Qs) or Stenosis.</p>
-                        </div>
-                    </div>
-                    <div class="flex items-center gap-3 bg-white p-2 rounded-lg shadow-sm border-l-4 border-slate-800 flex-1">
-                        <div class="w-8 h-8 bg-slate-900 text-white rounded flex items-center justify-center text-lg font-black shrink-0">E</div>
-                        <div class="flex-1 min-w-0">
-                            <div class="flex items-center gap-2 flex-wrap">
-                                <h3 class="text-sm font-black text-slate-800">EPSILON</h3>
-                                <span class="text-[10px] font-bold text-red-600 uppercase tracking-wide bg-red-50 px-2 py-0.5 rounded">ARVC</span>
-                            </div>
-                            <p class="text-xs text-slate-600 font-medium leading-tight mt-0.5">Epsilon wave (notch) end of QRS in V1-V3. T-wave inversion V1-V3.</p>
-                        </div>
-                    </div>
-                    <div class="flex items-center gap-3 bg-white p-2 rounded-lg shadow-sm border-l-4 border-slate-800 flex-1">
-                        <div class="w-8 h-8 bg-slate-900 text-white rounded flex items-center justify-center text-lg font-black shrink-0">R</div>
-                        <div class="flex-1 min-w-0">
-                            <div class="flex items-center gap-2 flex-wrap">
-                                <h3 class="text-sm font-black text-slate-800">REPOLARISATION</h3>
-                                <span class="text-[10px] font-bold text-red-600 uppercase tracking-wide bg-red-50 px-2 py-0.5 rounded">QT Abnormalities</span>
-                            </div>
-                            <p class="text-xs text-slate-600 font-medium leading-tight mt-0.5">Long QT (QTc &gt;450ms) &rarr; Torsades. Short QT (&lt;330ms). R-on-T.</p>
                         </div>
                     </div>
                 </div>
-                <div class="mt-4 text-center shrink-0">
-                    <div class="inline-flex items-center gap-2 text-red-800 font-bold text-xs bg-red-100 px-4 py-2 rounded-lg border border-red-200">
-                        <i data-lucide="activity" class="w-4 h-4"></i>
-                        <span>IF THE PATIENT LOOKS WELL BUT THE ECG WOBBLES, ADMIT FOR TELEMETRY.</span>
-                    </div>
-                </div>
-            </div>
 
-            <!-- POSTER 3: STEPS -->
-            <div id="poster-steps" class="poster-content h-full flex flex-col p-6 bg-white text-slate-900 hidden-poster">
-                <div class="mb-4 border-b-4 border-slate-900 pb-2 flex justify-between items-end shrink-0">
-                    <div>
-                        <h1 class="text-6xl font-black tracking-tighter text-slate-900 leading-none">S.T.E.P.S.</h1>
-                        <h2 class="text-lg font-light text-slate-500 mt-1">THE HOT DEBRIEF FRAMEWORK</h2>
+                <!-- =========================================================================
+                     POSTER 5: TRAJECTORY
+                     Ink Status: LOW (Outlined boxes instead of solid fills)
+                     ========================================================================= -->
+                <div id="poster-trajectory" class="poster p-12 pb-20 bg-white items-center">
+                    <div class="text-center mb-12 w-full shrink-0">
+                        <h1 class="text-7xl font-black text-slate-900 tracking-tighter uppercase">Clinical Trajectory</h1>
+                        <p class="text-2xl text-slate-500 mt-4 max-w-3xl mx-auto font-medium">
+                            When resuscitation fails, do not just "work harder" at the bottom of the pyramid. 
+                            <span class="inline-block border-2 border-red-600 text-red-600 font-bold px-3 py-0 rounded">Stop. Move UP a level.</span>
+                        </p>
                     </div>
-                    <div class="text-right">
-                        <p class="font-bold text-slate-900 text-xs">TIMING</p>
-                        <p class="text-slate-500 text-[10px]">Within 10 mins of event</p>
-                    </div>
-                </div>
-                <div class="flex-1 flex flex-col justify-between gap-3 min-h-0">
-                    <!-- S -->
-                    <div class="flex gap-4 flex-1">
-                        <div class="w-14 bg-blue-600 rounded-xl flex items-center justify-center text-3xl font-black text-white shrink-0 shadow-lg h-full">S</div>
-                        <div class="flex-1 bg-slate-50 p-3 rounded-xl border border-slate-100 flex flex-col justify-center">
-                            <h3 class="text-lg font-black text-blue-900 mb-0.5">SELF</h3>
-                            <p class="text-slate-700 font-medium text-xs italic mb-1">"I felt..."</p>
-                            <ul class="text-xs text-slate-600 list-disc list-inside space-y-0.5">
-                                <li>How was my cognitive bandwidth?</li>
-                                <li>Did I feel overwhelmed? (Stress response)</li>
-                                <li>Did I speak up when I had a concern?</li>
-                            </ul>
-                        </div>
-                    </div>
-                    <!-- T -->
-                    <div class="flex gap-4 flex-1">
-                        <div class="w-14 bg-indigo-600 rounded-xl flex items-center justify-center text-3xl font-black text-white shrink-0 shadow-lg h-full">T</div>
-                        <div class="flex-1 bg-slate-50 p-3 rounded-xl border border-slate-100 flex flex-col justify-center">
-                            <h3 class="text-lg font-black text-indigo-900 mb-0.5">TEAM</h3>
-                            <p class="text-slate-700 font-medium text-xs italic mb-1">"We worked..."</p>
-                            <ul class="text-xs text-slate-600 list-disc list-inside space-y-0.5">
-                                <li>Was the Team Leader clearly identified & hands-off?</li>
-                                <li>Did we maintain a shared mental model?</li>
-                                <li>Was communication closed-loop? ("Order &rarr; Task done")</li>
-                            </ul>
-                        </div>
-                    </div>
-                    <!-- E -->
-                    <div class="flex gap-4 flex-1">
-                        <div class="w-14 bg-purple-600 rounded-xl flex items-center justify-center text-3xl font-black text-white shrink-0 shadow-lg h-full">E</div>
-                        <div class="flex-1 bg-slate-50 p-3 rounded-xl border border-slate-100 flex flex-col justify-center">
-                            <h3 class="text-lg font-black text-purple-900 mb-0.5">ENVIRONMENT</h3>
-                            <p class="text-slate-700 font-medium text-xs italic mb-1">"The room..."</p>
-                            <ul class="text-xs text-slate-600 list-disc list-inside space-y-0.5">
-                                <li>Was the kit where we needed it? (Ergonomics)</li>
-                                <li>Did equipment fail?</li>
-                                <li>Was noise and crowd control managed effectively?</li>
-                            </ul>
-                        </div>
-                    </div>
-                    <!-- P -->
-                    <div class="flex gap-4 flex-1">
-                        <div class="w-14 bg-pink-600 rounded-xl flex items-center justify-center text-3xl font-black text-white shrink-0 shadow-lg h-full">P</div>
-                        <div class="flex-1 bg-slate-50 p-3 rounded-xl border border-slate-100 flex flex-col justify-center">
-                            <h3 class="text-lg font-black text-pink-900 mb-0.5">PATIENT</h3>
-                            <p class="text-slate-700 font-medium text-xs italic mb-1">"The case..."</p>
-                            <ul class="text-xs text-slate-600 list-disc list-inside space-y-0.5">
-                                <li>Specific clinical difficulties (e.g., distorted anatomy)?</li>
-                                <li>Was the physiology unpredicted?</li>
-                                <li>Did we miss a clinical cue?</li>
-                            </ul>
-                        </div>
-                    </div>
-                    <!-- S -->
-                    <div class="flex gap-4 flex-1">
-                        <div class="w-14 bg-red-600 rounded-xl flex items-center justify-center text-3xl font-black text-white shrink-0 shadow-lg h-full">S</div>
-                        <div class="flex-1 bg-slate-50 p-3 rounded-xl border border-slate-100 flex flex-col justify-center">
-                            <h3 class="text-lg font-black text-red-900 mb-0.5">SYSTEM</h3>
-                            <p class="text-slate-700 font-medium text-xs italic mb-1">"The organization..."</p>
-                            <ul class="text-xs text-slate-600 list-disc list-inside space-y-0.5">
-                                <li>Are there latent errors waiting to happen again?</li>
-                                <li>Do we need to update a protocol or checklist?</li>
-                                <li>Is there a training gap to address?</li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- POSTER 4: WHIMPERATIVE -->
-            <div id="poster-whimperative" class="poster-content h-full flex flex-col bg-white text-slate-900 hidden-poster">
-                <div class="p-6 pb-4 bg-slate-900 text-white shrink-0">
-                    <h1 class="text-4xl font-black uppercase tracking-tight">Kill the "Whimperative"</h1>
-                    <p class="text-base text-slate-400 mt-1">
-                        "Mitigated speech" is a disaster in resuscitation. It creates ambiguity when clarity is vital. 
-                        <span class="text-white font-bold"> Be polite, but be direct.</span>
-                    </p>
-                </div>
-                <div class="flex-1 flex flex-col md:flex-row min-h-0">
-                    <!-- Left -->
-                    <div class="flex-1 bg-red-50 p-6 border-r border-red-100 flex flex-col justify-center">
-                        <div class="flex items-center gap-2 mb-4 text-red-600">
-                            <i data-lucide="x-circle" class="w-6 h-6"></i>
-                            <h2 class="text-xl font-black tracking-wide">PASSIVE</h2>
-                        </div>
-                        <div class="space-y-6 flex-1 flex flex-col justify-center">
-                            <div class="opacity-80">
-                                <p class="text-lg font-serif italic text-slate-700 mb-1">"Would someone mind maybe grabbing the airway trolley?"</p>
-                                <div class="flex items-center gap-1 text-red-600 font-bold text-[10px] uppercase">
-                                    <i data-lucide="shield-alert" class="w-3 h-3"></i> Ambiguous Target
-                                </div>
-                            </div>
-                            <div class="opacity-80">
-                                <p class="text-lg font-serif italic text-slate-700 mb-1">"Any chance we could get a line in?"</p>
-                                <div class="flex items-center gap-1 text-red-600 font-bold text-[10px] uppercase">
-                                    <i data-lucide="shield-alert" class="w-3 h-3"></i> Question vs Order
-                                </div>
-                            </div>
-                            <div class="opacity-80">
-                                <p class="text-lg font-serif italic text-slate-700 mb-1">"I think we should probably shock him soon."</p>
-                                <div class="flex items-center gap-1 text-red-600 font-bold text-[10px] uppercase">
-                                    <i data-lucide="shield-alert" class="w-3 h-3"></i> Hinting vs Action
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <!-- Right -->
-                    <div class="flex-1 bg-white p-6 flex flex-col justify-center">
-                        <div class="flex items-center gap-2 mb-4 text-green-600">
-                            <i data-lucide="check-circle-2" class="w-6 h-6"></i>
-                            <h2 class="text-xl font-black tracking-wide">DIRECT</h2>
-                        </div>
-                        <div class="space-y-6 flex-1 flex flex-col justify-center">
-                            <div>
-                                <p class="text-lg font-bold text-slate-900 mb-1">"Steve, bring the airway trolley to the bedside."</p>
-                                <div class="flex items-center gap-1 text-green-600 font-bold text-[10px] uppercase">
-                                    <i data-lucide="zap" class="w-3 h-3"></i> Name + Action + Location
-                                </div>
-                            </div>
-                            <div>
-                                <p class="text-lg font-bold text-slate-900 mb-1">"Sarah, insert a large-bore IV in the left ACF."</p>
-                                <div class="flex items-center gap-1 text-green-600 font-bold text-[10px] uppercase">
-                                    <i data-lucide="zap" class="w-3 h-3"></i> Name + Specific Task
-                                </div>
-                            </div>
-                            <div>
-                                <p class="text-lg font-bold text-slate-900 mb-1">"Charge the defibrillator. Everyone stand clear."</p>
-                                <div class="flex items-center gap-1 text-green-600 font-bold text-[10px] uppercase">
-                                    <i data-lucide="zap" class="w-3 h-3"></i> Clear Command
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="bg-slate-100 p-4 shrink-0">
-                    <h3 class="text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest">Graded Assertiveness (PACE)</h3>
-                    <div class="grid grid-cols-4 gap-2 text-center">
-                        <div class="bg-white p-2 rounded shadow-sm">
-                            <div class="font-bold text-xs text-slate-900">PROBE</div>
-                            <div class="text-[9px] text-slate-500">"Do you know the sat is 88%?"</div>
-                        </div>
-                        <div class="bg-white p-2 rounded shadow-sm">
-                            <div class="font-bold text-xs text-yellow-600">ALERT</div>
-                            <div class="text-[9px] text-slate-500">"I am concerned about the sats."</div>
-                        </div>
-                        <div class="bg-white p-2 rounded shadow-sm">
-                            <div class="font-bold text-xs text-orange-600">CHALLENGE</div>
-                            <div class="text-[9px] text-slate-500">"Stop. We need to bag him now."</div>
-                        </div>
-                        <div class="bg-white p-2 rounded shadow-sm">
-                            <div class="font-bold text-xs text-red-600">EMERGENCY</div>
-                            <div class="text-[9px] text-slate-500">"Take the blade. I am intubating."</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- POSTER 5: TRAJECTORY -->
-            <div id="poster-trajectory" class="poster-content h-full flex flex-col p-6 bg-white text-slate-900 hidden-poster">
-                <div class="text-center mb-4 mt-1 shrink-0">
-                    <h1 class="text-4xl font-black text-slate-900">CLINICAL TRAJECTORY</h1>
-                    <p class="text-base text-slate-500 mt-1 max-w-xl mx-auto">
-                        When resuscitation fails, we often default to "working harder" at the bottom of the pyramid. 
-                        <span class="font-bold text-slate-900"> Stop. Move up a level.</span>
-                    </p>
-                </div>
-                <div class="flex-1 flex flex-col items-center justify-center relative w-full gap-1 min-h-0">
-                    <div class="w-full max-w-md space-y-1 flex-1 flex flex-col justify-center">
+                    <div class="flex-1 w-full flex flex-col items-center justify-center gap-4 min-h-0">
                         <!-- Level 1 -->
-                        <div class="bg-slate-900 text-white p-3 rounded-t-xl text-center relative mx-auto w-[60%] shadow-2xl z-40 border-b border-slate-700">
-                            <div class="absolute -left-12 top-1/2 -translate-y-1/2 text-slate-900 font-black text-[10px] w-10 text-right">WHY?</div>
-                            <h2 class="text-xl font-black">GOAL</h2>
-                            <p class="text-slate-400 text-[10px] mt-0.5">What is the ultimate objective?</p>
-                            <div class="mt-1 bg-slate-800 p-1 rounded text-[9px] uppercase font-bold text-red-300">Fixation Error: "Intubating" vs "Oxygenating"</div>
+                        <div class="w-[50%] bg-white border-4 border-slate-900 rounded-t-3xl p-8 text-center relative z-40">
+                            <div class="absolute -left-24 top-1/2 -translate-y-1/2 flex items-center gap-4">
+                                <span class="text-slate-900 font-bold text-xl uppercase tracking-widest text-right w-24">Why?</span>
+                                <div class="bg-white border-4 border-slate-900 text-slate-900 w-16 h-16 rounded-full flex items-center justify-center font-black text-2xl">1</div>
+                            </div>
+                            <h2 class="text-5xl font-black mb-2 tracking-tight text-slate-900">GOAL</h2>
+                            <p class="text-slate-500 text-lg">What is the ultimate objective?</p>
                         </div>
                         <!-- Level 2 -->
-                        <div class="bg-slate-800 text-white p-3 text-center relative mx-auto w-[70%] shadow-xl z-30 border-b border-slate-600">
-                            <div class="absolute -left-12 top-1/2 -translate-y-1/2 text-slate-700 font-black text-[10px] w-10 text-right">HOW?</div>
-                            <h2 class="text-xl font-black">STRATEGY</h2>
-                            <p class="text-slate-300 text-[10px] mt-0.5">The plan to achieve the goal.</p>
-                            <div class="mt-1 text-[9px] text-slate-400">"RSI vs Awake Fibreoptic vs Surgical"</div>
+                        <div class="w-[65%] bg-white border-4 border-slate-600 p-8 text-center relative z-30">
+                            <div class="absolute -left-24 top-1/2 -translate-y-1/2 flex items-center gap-4">
+                                <span class="text-slate-600 font-bold text-xl uppercase tracking-widest text-right w-24">How?</span>
+                                <div class="bg-white border-4 border-slate-600 text-slate-600 w-16 h-16 rounded-full flex items-center justify-center font-black text-2xl">2</div>
+                            </div>
+                            <h2 class="text-5xl font-black mb-2 tracking-tight text-slate-600">STRATEGY</h2>
+                            <p class="text-slate-400 text-lg">The plan to achieve the goal.</p>
                         </div>
                         <!-- Level 3 -->
-                        <div class="bg-slate-600 text-white p-3 text-center relative mx-auto w-[80%] shadow-lg z-20 border-b border-slate-500">
-                            <div class="absolute -left-12 top-1/2 -translate-y-1/2 text-slate-500 font-black text-[10px] w-10 text-right">WHAT?</div>
-                            <h2 class="text-xl font-black">LOGISTICS</h2>
-                            <p class="text-slate-200 text-[10px] mt-0.5">Specific procedures, drugs, position.</p>
-                            <div class="mt-1 grid grid-cols-2 gap-1 text-[9px] text-slate-300">
-                                <span>Kit selection</span>
-                                <span>Drug Dosing</span>
-                                <span>Position</span>
-                                <span>Lighting</span>
+                        <div class="w-[80%] bg-white border-4 border-slate-400 p-8 text-center relative z-20">
+                            <div class="absolute -left-24 top-1/2 -translate-y-1/2 flex items-center gap-4">
+                                <span class="text-slate-400 font-bold text-xl uppercase tracking-widest text-right w-24">What?</span>
+                                <div class="bg-white border-4 border-slate-400 text-slate-400 w-16 h-16 rounded-full flex items-center justify-center font-black text-2xl">3</div>
                             </div>
+                            <h2 class="text-5xl font-black mb-2 tracking-tight text-slate-400">LOGISTICS</h2>
+                            <p class="text-slate-400 text-lg">Kit. Dosing. Positioning. Lighting.</p>
                         </div>
                         <!-- Level 4 -->
-                        <div class="bg-slate-400 text-white p-3 rounded-b-xl text-center relative w-[90%] shadow-md z-10">
-                            <div class="absolute -left-12 top-1/2 -translate-y-1/2 text-slate-300 font-black text-[10px] w-10 text-right">WHO?</div>
-                            <h2 class="text-xl font-black">SKILLS</h2>
-                            <p class="text-slate-100 text-[10px] mt-0.5">Technical competency & Psychomotor skills.</p>
-                            <div class="mt-1 grid grid-cols-3 gap-1 text-[9px] text-slate-100 font-medium">
-                                <span>Dexterity</span>
-                                <span>Strength</span>
-                                <span>Familiarity</span>
+                        <div class="w-[95%] bg-white border-4 border-slate-300 rounded-b-3xl p-8 text-center relative z-10 pb-12">
+                            <div class="absolute -left-24 top-1/2 -translate-y-1/2 flex items-center gap-4">
+                                <span class="text-slate-300 font-bold text-xl uppercase tracking-widest text-right w-24">Who?</span>
+                                <div class="bg-white border-4 border-slate-300 text-slate-300 w-16 h-16 rounded-full flex items-center justify-center font-black text-2xl">4</div>
                             </div>
+                            <h2 class="text-5xl font-black mb-2 tracking-tight text-slate-300">SKILLS</h2>
+                            <p class="text-slate-400 text-lg">Technical competency & Psychomotor skills.</p>
                         </div>
-                    </div>
-                    <div class="mt-4 flex gap-3 items-center bg-red-50 p-4 rounded-xl border-l-8 border-red-500 max-w-lg shrink-0">
-                        <i data-lucide="brain" class="w-8 h-8 text-red-600 shrink-0"></i>
-                        <div>
-                            <h3 class="text-base font-bold text-red-900">The Failure Trap</h3>
-                            <p class="text-xs text-red-800 leading-snug">
-                                We tend to focus on the bottom layer (Skills). If you fail, don't just try harder at the skill. Move UP a level. Is the logistics (position) wrong? Is the strategy (plan) wrong?
+                        
+                        <div class="mt-8 bg-white border-l-8 border-red-500 p-6 rounded-r-xl max-w-2xl shadow-sm">
+                            <h3 class="text-red-700 font-bold text-xl mb-1 flex items-center gap-2">
+                                <i data-lucide="alert-triangle" class="w-6 h-6"></i> The Failure Trap
+                            </h3>
+                            <p class="text-slate-600 text-lg leading-snug">
+                                We often blame "Skills" first. But usually, the failure is higher up. 
+                                Is the logistics (position) wrong? Is the strategy (plan) wrong?
                             </p>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- POSTER 6: STEP UP -->
-            <div id="poster-zero" class="poster-content h-full flex flex-col bg-slate-900 text-white relative hidden-poster">
-                <div class="absolute top-0 right-0 p-4 opacity-10 font-black text-9xl leading-none select-none pointer-events-none">ZERO</div>
-                <div class="p-6 pb-2 shrink-0">
-                    <div class="inline-flex items-center gap-2 mb-1">
-                        <i data-lucide="pause-circle" class="w-8 h-8 text-red-500 fill-current"></i>
-                        <h1 class="text-5xl font-black tracking-tight text-white">S.T.E.P.U.P.</h1>
-                    </div>
-                    <h2 class="text-lg font-light text-slate-400">The Zero Point Survey</h2>
-                    <p class="mt-0.5 text-slate-300 max-w-md text-xs">30 seconds of preparation before the patient arrives is worth 30 minutes of chaos afterwards.</p>
-                </div>
-                <div class="flex-1 px-6 pb-6 grid grid-cols-2 gap-x-6 gap-y-4 content-center min-h-0">
-                    <!-- S -->
-                    <div class="group border-l-2 border-slate-700 pl-3">
-                        <div class="flex items-center gap-2 mb-0.5">
-                            <span class="text-red-500 font-black text-xl">S</span>
-                            <h3 class="text-lg font-bold text-white">SELF</h3>
+                <!-- =========================================================================
+                     POSTER 6: STEP UP (ZERO POINT)
+                     Ink Status: LOW (Reversed from dark)
+                     ========================================================================= -->
+                <div id="poster-zero" class="poster p-12 pb-20 bg-white text-slate-900">
+                    <div class="flex items-start justify-between mb-12 border-b-4 border-slate-900 pb-8 shrink-0">
+                        <div>
+                            <div class="flex items-center gap-6 mb-2">
+                                <i data-lucide="pause-circle" class="w-20 h-20 text-red-600 fill-current"></i>
+                                <h1 class="text-[7rem] leading-none font-black tracking-tight text-slate-900">S.T.E.P.U.P.</h1>
+                            </div>
+                            <h2 class="text-4xl text-slate-500 font-light tracking-wide pl-28">The Zero Point Survey</h2>
                         </div>
-                        <div class="text-slate-400 text-xs">
-                            <p class="mb-0.5 italic text-slate-500">"I am calm. I am ready."</p>
-                            <ul class="list-disc list-inside marker:text-red-500 space-y-0 text-[10px]">
-                                <li>Cognitive unloading (Step back)</li>
-                                <li>PPE check (Safety first)</li>
-                                <li>Stress control breathing (Box breathing)</li>
+                        <div class="text-right max-w-sm pt-4">
+                            <p class="text-2xl text-slate-500 leading-snug font-medium italic">
+                                "30 seconds of preparation before the patient arrives is worth 30 minutes of chaos afterwards."
+                            </p>
+                        </div>
+                    </div>
+                    <div class="flex-1 grid grid-cols-2 gap-x-12 gap-y-8 min-h-0 content-center">
+                        <div class="bg-white p-8 rounded-3xl border-l-8 border-red-500 flex flex-col justify-center shadow-sm border border-slate-200">
+                            <h3 class="text-4xl font-black text-slate-900 mb-2"><span class="text-red-600">S</span>ELF</h3>
+                            <p class="text-slate-400 italic mb-4 text-xl">"I am calm. I am ready."</p>
+                            <ul class="text-slate-600 space-y-2 text-lg font-medium">
+                                <li>• Cognitive unloading (Step back)</li>
+                                <li>• PPE check (Safety first)</li>
+                                <li>• Stress control breathing</li>
                             </ul>
                         </div>
-                    </div>
-                    <!-- T -->
-                    <div class="group border-l-2 border-slate-700 pl-3">
-                        <div class="flex items-center gap-2 mb-0.5">
-                            <span class="text-red-500 font-black text-xl">T</span>
-                            <h3 class="text-lg font-bold text-white">TEAM</h3>
-                        </div>
-                        <div class="text-slate-400 text-xs">
-                            <p class="mb-0.5 italic text-slate-500">"I am Team Leader."</p>
-                            <ul class="list-disc list-inside marker:text-red-500 space-y-0 text-[10px]">
-                                <li>Identify Team Leader (Don/Vest on)</li>
-                                <li>Assign roles (Airway, Access, Drugs)</li>
-                                <li>Stickers on / Introductions made</li>
+                        <div class="bg-white p-8 rounded-3xl border-l-8 border-red-500 flex flex-col justify-center shadow-sm border border-slate-200">
+                            <h3 class="text-4xl font-black text-slate-900 mb-2"><span class="text-red-600">T</span>EAM</h3>
+                            <p class="text-slate-400 italic mb-4 text-xl">"I am Team Leader."</p>
+                            <ul class="text-slate-600 space-y-2 text-lg font-medium">
+                                <li>• Identify Team Leader (Vest on)</li>
+                                <li>• Assign roles (Airway, Access, Drugs)</li>
+                                <li>• Stickers on / Introductions made</li>
                             </ul>
                         </div>
-                    </div>
-                    <!-- E -->
-                    <div class="group border-l-2 border-slate-700 pl-3">
-                        <div class="flex items-center gap-2 mb-0.5">
-                            <span class="text-red-500 font-black text-xl">E</span>
-                            <h3 class="text-lg font-bold text-white">ENVIRONMENT</h3>
-                        </div>
-                        <div class="text-slate-400 text-xs">
-                            <p class="mb-0.5 italic text-slate-500">"Is the room ready?"</p>
-                            <ul class="list-disc list-inside marker:text-red-500 space-y-0 text-[10px]">
-                                <li>Trolley height set & brakes on</li>
-                                <li>Airway plan (Plan A, B, C kit out)</li>
-                                <li>Ultrasound machine on & gel ready</li>
-                                <li>Crowd control (Clear the room)</li>
+                        <div class="bg-white p-8 rounded-3xl border-l-8 border-red-500 flex flex-col justify-center shadow-sm border border-slate-200">
+                            <h3 class="text-4xl font-black text-slate-900 mb-2"><span class="text-red-600">E</span>NVIRONMENT</h3>
+                            <p class="text-slate-400 italic mb-4 text-xl">"Is the room ready?"</p>
+                            <ul class="text-slate-600 space-y-2 text-lg font-medium">
+                                <li>• Trolley height set & brakes on</li>
+                                <li>• Airway plan (A, B, C kit out)</li>
+                                <li>• Ultrasound machine on & gel ready</li>
                             </ul>
                         </div>
-                    </div>
-                    <!-- P -->
-                    <div class="group border-l-2 border-slate-700 pl-3">
-                        <div class="flex items-center gap-2 mb-0.5">
-                            <span class="text-red-500 font-black text-xl">P</span>
-                            <h3 class="text-lg font-bold text-white">PATIENT</h3>
-                        </div>
-                        <div class="text-slate-400 text-xs">
-                            <p class="mb-0.5 italic text-slate-500">"What do we know?"</p>
-                            <ul class="list-disc list-inside marker:text-red-500 space-y-0 text-[10px]">
-                                <li>ATMIST Summary review</li>
-                                <li>Age / Weight (Broselow/WETFLAG)</li>
-                                <li>Specific hazards (Chem/Rad/Bio)</li>
+                        <div class="bg-white p-8 rounded-3xl border-l-8 border-red-500 flex flex-col justify-center shadow-sm border border-slate-200">
+                            <h3 class="text-4xl font-black text-slate-900 mb-2"><span class="text-red-600">P</span>ATIENT</h3>
+                            <p class="text-slate-400 italic mb-4 text-xl">"What do we know?"</p>
+                            <ul class="text-slate-600 space-y-2 text-lg font-medium">
+                                <li>• ATMIST Summary review</li>
+                                <li>• Age / Weight (Broselow/WETFLAG)</li>
+                                <li>• Specific hazards (Chem/Rad/Bio)</li>
                             </ul>
                         </div>
-                    </div>
-                    <!-- U -->
-                    <div class="group border-l-2 border-slate-700 pl-3">
-                        <div class="flex items-center gap-2 mb-0.5">
-                            <span class="text-red-500 font-black text-xl">U</span>
-                            <h3 class="text-lg font-bold text-white">UPDATE</h3>
-                        </div>
-                        <div class="text-slate-400 text-xs">
-                            <p class="mb-0.5 italic text-slate-500">"Here is the plan..."</p>
-                            <ul class="list-disc list-inside marker:text-red-500 space-y-0 text-[10px]">
-                                <li>Shared Mental Model Briefing</li>
-                                <li>"We are expecting X"</li>
-                                <li>"If X happens, we will do Y"</li>
+                        <div class="bg-white p-8 rounded-3xl border-l-8 border-red-500 flex flex-col justify-center shadow-sm border border-slate-200">
+                            <h3 class="text-4xl font-black text-slate-900 mb-2"><span class="text-red-600">U</span>PDATE</h3>
+                            <p class="text-slate-400 italic mb-4 text-xl">"Here is the plan..."</p>
+                            <ul class="text-slate-600 space-y-2 text-lg font-medium">
+                                <li>• Shared Mental Model Briefing</li>
+                                <li>• "We are expecting X"</li>
+                                <li>• "If X happens, we will do Y"</li>
                             </ul>
                         </div>
-                    </div>
-                    <!-- P -->
-                    <div class="group border-l-2 border-slate-700 pl-3">
-                        <div class="flex items-center gap-2 mb-0.5">
-                            <span class="text-red-500 font-black text-xl">P</span>
-                            <h3 class="text-lg font-bold text-white">PRIORITIES</h3>
-                        </div>
-                        <div class="text-slate-400 text-xs">
-                            <p class="mb-0.5 italic text-slate-500">"The first action is..."</p>
-                            <ul class="list-disc list-inside marker:text-red-500 space-y-0 text-[10px]">
-                                <li>Immediate IV access?</li>
-                                <li>Finger thoracostomy?</li>
-                                <li>Transfer to CT (Don't take off scoop)?</li>
+                        <div class="bg-white p-8 rounded-3xl border-l-8 border-red-500 flex flex-col justify-center shadow-sm border border-slate-200">
+                            <h3 class="text-4xl font-black text-slate-900 mb-2"><span class="text-red-600">P</span>RIORITIES</h3>
+                            <p class="text-slate-400 italic mb-4 text-xl">"The first action is..."</p>
+                            <ul class="text-slate-600 space-y-2 text-lg font-medium">
+                                <li>• Immediate IV access?</li>
+                                <li>• Finger thoracostomy?</li>
+                                <li>• Transfer to CT (Don't take off scoop)?</li>
                             </ul>
                         </div>
                     </div>
                 </div>
-                <div class="p-3 bg-slate-800 text-center text-slate-500 font-mono text-[10px] uppercase tracking-widest shrink-0">
-                    Resus.me • Step into the box ready.
-                </div>
-            </div>
 
+            </div>
         </div>
     </div>
 
-    <!-- Logic -->
     <script>
-        // Init Icons
-        lucide.createIcons();
-
-        // Poster Data for Nav
         const posters = [
             { id: '3plus3', title: 'The 3 + 3 Rule', icon: 'heart' },
             { id: 'wobbler', title: 'W.O.B.B.L.E.R.', icon: 'activity' },
@@ -632,24 +660,31 @@
 
         let activePosterId = '3plus3';
 
+        function init() {
+            lucide.createIcons();
+            renderNav();
+            fitPaperToScreen();
+            window.addEventListener('resize', fitPaperToScreen);
+        }
+
         function renderNav() {
             const nav = document.getElementById('nav-container');
             nav.innerHTML = '';
             
-            posters.forEach(poster => {
+            posters.forEach((poster, index) => {
                 const btn = document.createElement('button');
                 const isActive = activePosterId === poster.id;
                 
-                btn.className = `flex items-center gap-3 p-3 rounded-lg text-left transition-all ${
+                btn.className = `w-full flex items-center gap-3 p-4 rounded-xl text-left transition-all mb-2 ${
                     isActive 
-                    ? 'bg-red-600 text-white shadow-lg font-medium' 
-                    : 'hover:bg-slate-800 text-slate-300'
+                    ? 'bg-red-600 text-white shadow-lg font-bold' 
+                    : 'hover:bg-slate-800 text-slate-400'
                 }`;
                 
-                btn.onclick = () => switchPoster(poster.id);
+                btn.onclick = () => switchPoster(poster.id, index);
                 
                 btn.innerHTML = `
-                    <i data-lucide="${poster.icon}" class="w-5 h-5"></i>
+                    <i data-lucide="${poster.icon}" class="w-5 h-5 ${isActive ? 'text-white' : 'text-slate-500'}"></i>
                     <span>${poster.title}</span>
                 `;
                 
@@ -658,24 +693,47 @@
             lucide.createIcons();
         }
 
-        function switchPoster(id) {
+        function switchPoster(id, index) {
             activePosterId = id;
+            document.querySelectorAll('.poster').forEach(el => el.classList.remove('active'));
             
-            // Hide all
-            document.querySelectorAll('.poster-content').forEach(el => {
-                el.classList.add('hidden-poster');
-            });
-            
-            // Show active
             const target = document.getElementById(`poster-${id}`);
-            if(target) target.classList.remove('hidden-poster');
+            if(target) target.classList.add('active');
+
+            const refEl = document.getElementById('poster-ref');
+            if(refEl) refEl.innerText = `REF: 00${index + 1}`;
             
-            // Update nav styles
             renderNav();
         }
 
-        // Init
-        renderNav();
+        function fitPaperToScreen() {
+            const stage = document.getElementById('paper-stage');
+            const viewport = document.getElementById('viewport');
+            
+            // Fixed reference height for A3 in pixels (approx 96 DPI)
+            // This is just a base scalar; CSS handles the ratio.
+            const paperH = 1587; 
+            
+            const pad = 60; // Padding around paper in viewport
+            const availH = viewport.clientHeight - pad;
+            const availW = viewport.clientWidth - pad;
+            
+            // Calculate scale based on height fitting first (Portrait mode)
+            let scale = availH / paperH;
+            
+            // Check if width is the constraining factor
+            const paperW = 1123; // A3 Width reference
+            if (paperW * scale > availW) {
+                scale = availW / paperW;
+            }
+            
+            if (scale > 1.2) scale = 1.2; // Max zoom cap
+            
+            stage.style.transform = `scale(${scale})`;
+            document.getElementById('scale-readout').innerText = `ISO A-Series`;
+        }
+
+        init();
     </script>
 </body>
 </html>
